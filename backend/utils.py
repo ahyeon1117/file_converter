@@ -1,6 +1,7 @@
 import img2pdf
 import zipfile
 import pdf2image
+import time
 from io import BytesIO
 from urllib.parse import quote
 from fastapi import UploadFile
@@ -33,8 +34,15 @@ async def convert_png_to_pdf(file: UploadFile) -> StreamingResponse:
     )
 
 async def convert_pdf_to_png_streaming(file: UploadFile) -> StreamingResponse:
+    r_start_time = time.perf_counter()
     pdf_bytes = await file.read()
+    r_end_time = time.perf_counter()
+    print(f"PDF 읽기 시간: {r_end_time - r_start_time:.3f}초")
+    c_start_time = time.perf_counter()
     images = convert_pdf_to_images(pdf_bytes)
+    c_end_time = time.perf_counter()
+    print(f"PDF 이미지로 변환 시간: {c_end_time - c_start_time:.3f}초")
+    
     base_filename = file.filename.rsplit(".", 1)[0] if file.filename else "converted_file"
     
     if len(images) == 1:
@@ -42,13 +50,16 @@ async def convert_pdf_to_png_streaming(file: UploadFile) -> StreamingResponse:
         return create_png_response(images[0], base_filename)
     else:
         # 페이지가 여러 개면 ZIP 파일로 묶어서 반환
+        z_start_time = time.perf_counter()
         zip_buffer = create_zip_from_images(images, base_filename)
+        z_end_time = time.perf_counter()
+        print(f"압축 시간: {z_start_time - z_end_time:.3f}초")
         return create_zip_response(zip_buffer, base_filename)
       
 
 def convert_pdf_to_images(pdf_bytes: bytes) -> list:
     try:
-        images = pdf2image.convert_from_bytes(pdf_bytes, poppler_path=path)
+        images = pdf2image.convert_from_bytes(pdf_bytes, poppler_path=path, thread_count=10, dpi=150)
         return images
     except Exception as e:
         print(f"🚨 PDF 변환 오류 발생: {e}")
